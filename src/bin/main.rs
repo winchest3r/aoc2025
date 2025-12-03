@@ -46,6 +46,10 @@ fn main() -> Result<()> {
             let mut second = aoc2025::second::Product::new();
             execute(&mut second, &data);
         }
+        3 => {
+            let mut third = aoc2025::third::JoltageBank::new();
+            execute(&mut third, &data);
+        }
         _ => {
             return Err(anyhow!("Exercise not implemented"));
         }
