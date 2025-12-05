@@ -28,35 +28,21 @@ where
 }
 
 fn main() -> Result<()> {
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() != 2 {
-        return Err(anyhow!("Usage: file ex_num(1-12)"));
-    }
-    let ex_num = args[1].parse::<u8>()?;
+    let ex_num = std::env::args()
+        .nth(1)
+        .ok_or(anyhow!("Usage: file ex_num(1-12)"))?
+        .parse::<u8>()?;
 
     let data = aoc2025::utils::read_data(ex_num, "data")
         .map_err(|e| anyhow!("Exercise not implemented: {e}"))?;
 
     match ex_num {
-        1 => {
-            let mut first = aoc2025::first::Dial::new();
-            execute(&mut first, &data);
-        }
-        2 => {
-            let mut second = aoc2025::second::Product::new();
-            execute(&mut second, &data);
-        }
-        3 => {
-            let mut third = aoc2025::third::JoltageBank::new();
-            execute(&mut third, &data);
-        }
-        4 => {
-            let mut fourth = aoc2025::fourth::Field::new();
-            execute(&mut fourth, &data);
-        }
-        _ => {
-            return Err(anyhow!("Exercise not implemented"));
-        }
+        1 => execute(&mut aoc2025::first::Dial::new(), &data),
+        2 => execute(&mut aoc2025::second::Product::new(), &data),
+        3 => execute(&mut aoc2025::third::JoltageBank::new(), &data),
+        4 => execute(&mut aoc2025::fourth::Field::new(), &data),
+        5 => execute(&mut aoc2025::fifth::Database::new(), &data),
+        _ => return Err(anyhow!("Exercise not implemented")),
     }
 
     Ok(())
