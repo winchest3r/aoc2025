@@ -48,20 +48,13 @@ impl MathProblem {
         let width = data.lines().next().unwrap().len() + 1; // +'\n'
         let idx = |i: usize, j: usize| -> usize { i * width + j };
 
-        let mut row = 0;
-        let mut col = 0;
-
         // get all areas with numbers
         let bytes = data.as_bytes();
+        let row = data.trim().lines().count();
+        let mut col = 0;
         while col < width {
             let beg_row = 0;
             let beg_col = col;
-
-            // process row till the operator
-            while ![b'*', b'+'].contains(&bytes[idx(row, col)]) {
-                row += 1;
-            }
-            self.ops.push(bytes[idx(row, col)] as char);
 
             // end of the area when bytes in all rows are spaces or '\n'
             let mut has_digit = true;
@@ -88,6 +81,11 @@ impl MathProblem {
             }
 
             col += 1;
+        }
+
+        // get operators
+        for op in data.trim().lines().last().unwrap().split_whitespace() {
+            self.ops.push(op.chars().next().unwrap());
         }
     }
 
