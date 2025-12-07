@@ -43,6 +43,7 @@ fn main() -> Result<()> {
         4 => execute(&mut aoc2025::fourth::Field::new(), &data),
         5 => execute(&mut aoc2025::fifth::Database::new(), &data),
         6 => execute(&mut aoc2025::sixth::MathProblem::new(), &data),
+        7 => execute(&mut aoc2025::seventh::Tachyon::new(), &data),
         _ => return Err(anyhow!("Exercise not implemented")),
     }
 
