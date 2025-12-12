@@ -48,6 +48,7 @@ fn main() -> Result<()> {
         9 => execute(&mut aoc2025::ninth::Floor::new(), &data),
         10 => execute(&mut aoc2025::tenth::Machine::new(), &data),
         11 => execute(&mut aoc2025::eleventh::Servers::new(), &data),
+        12 => execute(&mut aoc2025::twelfth::Final::new(), &data),
         _ => return Err(anyhow!("Exercise not implemented")),
     }
 
