@@ -1,5 +1,4 @@
-use std::collections::HashSet;
-use std::ops::Add;
+use std::collections::BTreeMap;
 
 use crate::utils::Exercise;
 
@@ -15,47 +14,18 @@ impl Point {
     }
 }
 
-impl Add for Point {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        Self::Output {
-            x: self.x + rhs.x,
-            y: self.y + rhs.y,
-        }
-    }
-}
-
-pub struct Bounds {
-    x_min: i64,
-    x_max: i64,
-    y_min: i64,
-    y_max: i64,
-}
-
-impl Bounds {
-    pub fn contains(&self, p: &Point) -> bool {
-        p.x >= self.x_min && p.x <= self.x_max && p.y >= self.y_min && p.y <= self.y_max
-    }
-}
-
 pub struct Floor {
     /// (x, y)
     tiles: Vec<Point>,
-    shape: HashSet<Point>,
 }
 
 impl Floor {
     pub fn new() -> Self {
-        Self {
-            tiles: Vec::new(),
-            shape: HashSet::new(),
-        }
+        Self { tiles: Vec::new() }
     }
 
     pub fn clear(&mut self) {
         self.tiles.clear();
-        self.shape.clear();
     }
 
     pub fn fill(&mut self, data: &str) {
@@ -66,86 +36,107 @@ impl Floor {
         }
     }
 
-    fn get_bounds(&self) -> Bounds {
-        let x_min = self.tiles.iter().map(|p| p.x).min().unwrap() - 1;
-        let x_max = self.tiles.iter().map(|p| p.x).max().unwrap() + 1;
-        let y_min = self.tiles.iter().map(|p| p.y).min().unwrap() - 1;
-        let y_max = self.tiles.iter().map(|p| p.y).max().unwrap() + 1;
-
-        Bounds {
-            x_min,
-            x_max,
-            y_min,
-            y_max,
-        }
-    }
-
-    pub fn form_shape(&mut self) {
-        let bounds = self.get_bounds();
-
-        // fill corners
-        for &p in self.tiles.iter() {
-            for dir in [
-                Point::new(1, 0),
-                Point::new(0, 1),
-                Point::new(-1, 0),
-                Point::new(0, -1),
-            ] {
-                let mut out_of_range = false;
-                let mut points = vec![p];
-                // check direction - if out of range - ignore
-                while !out_of_range {
-                    let next = *points.last().unwrap() + dir;
-                    points.push(next);
-                    if !bounds.contains(&next) {
-                        out_of_range = true;
-                    // or add it to shape
-                    } else if self.tiles.contains(&next) {
-                        self.shape.extend(points);
-                        break;
-                    }
-                }
-            }
-        }
-
-        // fill inside
-        let corners: HashSet<_> = self.shape.iter().copied().collect();
-        for y in bounds.y_min..bounds.y_max {
-            let mut inside = false;
-            for x in bounds.x_min..bounds.x_max {
-                let point = Point::new(x, y);
-
-                // hitting a corner - toggle
-                if corners.contains(&point) {
-                    inside = true;
-                } else if inside {
-                    self.shape.insert(point);
-                }
-            }
-        }
-    }
-
     pub fn get_rect(a: &Point, b: &Point) -> u64 {
         let width = (b.x - a.x).abs() as u64 + 1;
         let height = (b.y - a.y).abs() as u64 + 1;
         width * height
     }
 
-    pub fn get_rect_set(a: &Point, b: &Point) -> HashSet<Point> {
-        let mut rect = HashSet::new();
+    /// Builds BTree maps related to vertical and horizontal edges.
+    ///
+    /// (Tree<x, (y_min, y_max)>, Tree<y, (x_min, x_max)>)
+    pub fn build_edges(
+        &self,
+    ) -> (
+        BTreeMap<i64, Vec<(i64, i64)>>,
+        BTreeMap<i64, Vec<(i64, i64)>>,
+    ) {
+        let mut v_map: BTreeMap<i64, Vec<(i64, i64)>> = BTreeMap::new();
+        let mut h_map: BTreeMap<i64, Vec<(i64, i64)>> = BTreeMap::new();
 
-        let x_min = a.x.min(b.x);
-        let x_max = a.x.max(b.x);
-        let y_min = a.y.min(b.y);
-        let y_max = a.y.max(b.y);
+        let len = self.tiles.len();
+        for i in 0..len {
+            let a = self.tiles[i];
+            let b = self.tiles[(i + 1) % len]; // wrap around the loop
 
-        for x in x_min..=x_max {
-            for y in y_min..=y_max {
-                rect.insert(Point::new(x, y));
+            if a.x == b.x {
+                v_map
+                    .entry(a.x)
+                    .or_default()
+                    .push((a.y.min(b.y), a.y.max(b.y)));
+            } else {
+                h_map
+                    .entry(a.y)
+                    .or_default()
+                    .push((a.x.min(b.x), a.x.max(b.x)));
             }
         }
 
-        rect
+        (v_map, h_map)
+    }
+
+    /// Rect is valid if it is not cross other edges.
+    pub fn rect_is_valid(
+        x1: i64,
+        x2: i64,
+        y1: i64,
+        y2: i64,
+        v_map: &BTreeMap<i64, Vec<(i64, i64)>>,
+        h_map: &BTreeMap<i64, Vec<(i64, i64)>>,
+    ) -> bool {
+        let (x_min, x_max) = (x1.min(x2), x1.max(x2));
+        let (y_min, y_max) = (y1.min(y2), y1.max(y2));
+
+        // check if vertical edges crossing interrior
+        for (_x, segs) in v_map.range((x_min + 1)..x_max) {
+            for &(y_lo, y_hi) in segs {
+                if y_lo < y_max && y_hi > y_min {
+                    return false;
+                }
+            }
+        }
+
+        // same for horizontal
+        for (_y, segs) in h_map.range((y_min + 1)..y_max) {
+            for &(x_lo, x_hi) in segs {
+                if x_lo < x_max && x_hi > x_min {
+                    return false;
+                }
+            }
+        }
+
+        true
+    }
+
+    pub fn largest_rect(&self) -> i64 {
+        let (v_map, h_map) = self.build_edges();
+
+        let mut best = 0;
+        let len = self.tiles.len();
+
+        for i in 0..len {
+            for j in (i + 1)..len {
+                let a = self.tiles[i];
+                let b = self.tiles[j];
+
+                if a.x == b.x || a.y == b.y {
+                    continue;
+                }
+
+                let width = (a.x - b.x).abs() + 1;
+                let height = (a.y - b.y).abs() + 1;
+                let area = width * height;
+                if area <= best {
+                    continue;
+                }
+
+                if Floor::rect_is_valid(a.x, b.x, a.y, b.y, &v_map, &h_map) {
+                    best = area;
+                }
+            }
+        }
+
+        best
     }
 }
 
@@ -171,20 +162,8 @@ impl Exercise for Floor {
     fn part2(&mut self, data: &str) -> String {
         self.clear();
         self.fill(data);
-        self.form_shape();
 
-        let n = self.tiles.len();
-        let mut max_area = 0;
-        for i in 0..n {
-            for j in i + 1..n {
-                let rect = Floor::get_rect_set(&self.tiles[i], &self.tiles[j]);
-                if rect.is_subset(&self.shape) {
-                    max_area = max_area.max(rect.len());
-                }
-            }
-        }
-
-        max_area.to_string()
+        self.largest_rect().to_string()
     }
 }
 
