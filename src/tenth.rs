@@ -1,5 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 
+use good_lp::*;
 use regex::Regex;
 
 use crate::utils::Exercise;
@@ -105,77 +106,34 @@ impl Machine {
         panic!("must have a solution!")
     }
 
-    fn dfs(
-        k: usize,
-        x: &mut [u32],
-        mat: &[Vec<u8>],
-        rem: &mut [i32],
-        best: &mut u32,
-        best_x: &mut Vec<u32>,
-    ) {
-        let m = rem.len();
-        let n = x.len();
+    pub fn get_min_joltage_inc(&self) -> u64 {
+        let m = self.buttons.len();
+        let n = self.target_joltage.len();
 
-        // If all satisfied → solution
-        if rem.iter().all(|&v| v == 0) {
-            let cost: u32 = x.iter().sum();
-            if cost < *best {
-                *best = cost;
-                *best_x = x.to_vec();
-            }
-            return;
-        }
+        let mut vars = variables!();
+        let xs: Vec<_> = (0..m)
+            .map(|_| vars.add(variable().integer().min(0)))
+            .collect();
 
-        if k == n {
-            return;
-        }
+        let mut model = vars
+            .minimise(xs.iter().fold(Expression::from(0.0), |acc, x| acc + *x))
+            .using(default_solver);
 
-        // Minimal number of presses needed if we press this button
-        let mut needed = 0;
-        for i in 0..m {
-            if mat[i][k] == 1 && rem[i] > 0 {
-                needed = needed.max(rem[i]);
-            }
-        }
+        for i in 0..n {
+            let mut expr: Expression = 0.0.into();
 
-        // Try 0 .. needed presses
-        for presses in 0..=needed as u32 {
-            x[k] = presses;
-
-            // subtract effect
-            if presses > 0 {
-                for i in 0..m {
-                    if mat[i][k] == 1 {
-                        rem[i] -= presses as i32;
-                        if rem[i] < 0 {
-                            rem[i] = 0;
-                        }
-                    }
+            for (j, btn) in self.buttons.iter().enumerate() {
+                if btn.contains(&(i as u32)) {
+                    expr += xs[j];
                 }
             }
 
-            // lower bound: remaining sum of rem
-            let lb = x.iter().sum::<u32>() + rem.iter().map(|&v| v as u32).sum::<u32>();
-
-            if lb < *best {
-                Machine::dfs(k + 1, x, mat, rem, best, best_x);
-            }
-
-            // undo subtract
-            if presses > 0 {
-                for i in 0..m {
-                    if mat[i][k] == 1 {
-                        rem[i] += presses as i32;
-                    }
-                }
-            }
+            model = model.with(constraint!(expr == self.target_joltage[i] as f32));
         }
 
-        x[k] = 0;
-    }
+        let solution = model.solve().unwrap();
 
-    pub fn get_min_joltage_inc(&self) -> u32 {
-        0
+        xs.iter().map(|x| solution.value(*x) as u64).sum()
     }
 }
 
@@ -202,21 +160,11 @@ impl Exercise for Machine {
         self.clear();
 
         let mut total = 0;
-        let len = data.lines().count();
-        let mut threads = Vec::new();
-        for (i, line) in data.lines().enumerate() {
+        for line in data.lines() {
             self.fill(line);
-            let clone = self.clone();
-            let thread = std::thread::spawn(move || {
-                let presses = clone.get_min_joltage_inc();
-                presses
-            });
-            threads.push(thread);
+            let presses = self.get_min_joltage_inc();
+            total += presses;
             self.clear();
-        }
-
-        for thread in threads {
-            total += thread.join().unwrap();
         }
 
         total.to_string()
